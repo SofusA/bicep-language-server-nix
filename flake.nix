@@ -8,28 +8,41 @@
 
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
-      let pkgs = import nixpkgs { inherit system; };
+      let
+        pkgs = import nixpkgs { inherit system; };
+       
+        bicepLangServer = pkgs.stdenv.mkDerivation rec {
+          pname = "bicep-langserver";
+          version = "0.30.23";
+
+          src = pkgs.fetchzip {
+            url = "https://github.com/Azure/bicep/releases/download/v${version}/bicep-langserver.zip";
+            sha256 = "sha256-aZ9ybx0a6wOg+p34UPwSfynXqSGR5X4Ko6aGMA64b2Y=";
+            stripRoot = false;
+          };
+          
+          installPhase = ''
+            mkdir -p $out/bin
+            cp -r $src $out/bin/Bicep.LangServer/
+
+            cat <<EOF > $out/bin/bicep-langserver
+            #!/usr/bin/env bash
+            exec dotnet $out/bin/Bicep.LangServer/Bicep.LangServer.dll "\$@"
+            EOF
+  
+            # Make the script executable
+            chmod +x $out/bin/bicep-langserver
+          
+          '';
+        };
+      
       in {
         devShell = pkgs.mkShell {
           buildInputs = [
-            pkgs.bash
-            pkgs.unzip
-            (pkgs.writeShellScriptBin "bicep-langserver" ''
-              exec dotnet $PWD/.bicep-langserver/Bicep.LangServer.dll
-            '')
+            bicepLangServer
           ];
-
-          src = pkgs.fetchurl {
-            url = "https://github.com/Azure/bicep/releases/download/v0.30.23/bicep-langserver.zip";
-            sha256 = "sha256-J+GQfAWizDIb1vonqhKkA11C7bhNfPzCKZpYfFl3qxw=";
-          };
-
-          installPhase = ''
-            mkdir -p $PWD/.bicep-langserver
-            cd $PWD/.bicep-langserver
-
-            unzip $src
-          '';
         };
+        
+        packages.bicep-langserver = bicepLangServer;
       });
 }
